@@ -1,29 +1,40 @@
 package handlers
 
 import (
+	"encoding/json"
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 	"url-shortener/internals/config"
+	"url-shortener/internals/repo"
 )
 
-var DB = map[string]string{}
-
 type Handlers struct {
-	AppConfig config.Config
+	AppConfig  config.Config
+	Repository repo.PostgresRepo
 }
 
-func (h Handlers) DoShortUrl(ctx *fiber.Ctx) error {
-	body := string(ctx.Body())
-	shortUrlId := uuid.New().String()
-	DB[shortUrlId] = body
+type fullUrl struct {
+	Url string `json:"url"`
+}
+
+func (h Handlers) DoShortUrlREST(ctx *fiber.Ctx) error {
+	body := ctx.Body()
+	var full fullUrl
+
+	err := json.Unmarshal(body, &full)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "Json invalid!")
+	}
+
+	shortUrl, _ := h.Repository.Create(full.Url)
+
 	ctx.Status(201)
-	return ctx.SendString(h.AppConfig.BaseURL + shortUrlId)
+	return ctx.SendString(h.AppConfig.BaseURL + shortUrl)
 }
 
-func (Handlers) GetFullURL(c *fiber.Ctx) error {
+func (h Handlers) GetFullURL(c *fiber.Ctx) error {
 
 	id := c.Params("id")
-	fullUrl := DB[id]
+	fullUrl, _ := h.Repository.Get(id)
 
 	c.Status(307)
 	c.Set("Location", fullUrl)
